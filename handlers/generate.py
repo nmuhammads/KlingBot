@@ -48,9 +48,9 @@ class I2VStates(StatesGroup):
 class MCStates(StatesGroup):
     """States for Motion Control flow."""
     waiting_image = State()
+    waiting_orientation = State()  # Moved before video
     waiting_video = State()
     waiting_prompt = State()
-    waiting_orientation = State()
     waiting_mode = State()
     confirming = State()
 
@@ -606,29 +606,67 @@ async def mc_image_received(message: Message, state: FSMContext) -> None:
         await message.answer(t("error_invalid_image", lang))
         return
     
+    # Go to orientation selection (before video)
+    await show_mc_orientation(message, state, lang)
+
+
+async def show_mc_orientation(message: Message, state: FSMContext, lang: str, edit: bool = False) -> None:
+    """Show MC orientation selection with detailed descriptions."""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=t("btn_orient_image_full", lang), callback_data="mc_orient_image")],
+        [InlineKeyboardButton(text=t("btn_orient_video_full", lang), callback_data="mc_orient_video")],
+        [InlineKeyboardButton(text=t("btn_cancel", lang), callback_data="gen_cancel")]
+    ])
+    
+    if edit:
+        await message.edit_text(t("mc_orientation_detailed", lang), reply_markup=keyboard)
+    else:
+        await message.answer(t("mc_orientation_detailed", lang), reply_markup=keyboard)
+    
+    await state.set_state(MCStates.waiting_orientation)
+
+
+@router.callback_query(F.data.startswith("mc_orient_"), MCStates.waiting_orientation)
+async def mc_orientation_selected(callback: CallbackQuery, state: FSMContext) -> None:
+    """Handle MC orientation selection - then ask for video."""
+    orientation = callback.data.split("_")[2]  # image or video
+    lang = get_user_lang(callback.from_user.id)
+    
+    await state.update_data(orientation=orientation)
+    
+    # Show video upload prompt with max duration info
+    max_duration = 10 if orientation == "image" else 30
+    await state.update_data(max_video_duration=max_duration)
+    
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=t("btn_cancel", lang), callback_data="gen_cancel")]
     ])
     
-    await message.answer(t("mc_video", lang), reply_markup=keyboard)
+    await callback.message.edit_text(
+        t("mc_video_with_limit", lang, max_duration=max_duration),
+        reply_markup=keyboard
+    )
     await state.set_state(MCStates.waiting_video)
+    await callback.answer()
 
 
 @router.message(MCStates.waiting_video, F.video)
 async def mc_video_received(message: Message, state: FSMContext) -> None:
-    """Handle MC reference video upload."""
+    """Handle MC reference video upload with orientation-based validation."""
     lang = get_user_lang(message.from_user.id)
     video = message.video
+    data = await state.get_data()
     
-    # Validate video duration
+    # Get max duration based on orientation
+    max_duration = data.get("max_video_duration", 30)
     duration = video.duration or 0
     
     if duration < 3:
         await message.answer(t("error_video_too_short", lang))
         return
     
-    if duration > 30:
-        await message.answer(t("error_video_too_long", lang))
+    if duration > max_duration:
+        await message.answer(t("error_video_exceeds_limit", lang, max_duration=max_duration))
         return
     
     try:
@@ -639,6 +677,7 @@ async def mc_video_received(message: Message, state: FSMContext) -> None:
         await message.answer(t("error_invalid_video", lang))
         return
     
+    # Go to prompt step
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=t("btn_skip", lang), callback_data="mc_prompt_skip")],
         [InlineKeyboardButton(text=t("btn_cancel", lang), callback_data="gen_cancel")]
@@ -653,7 +692,7 @@ async def mc_prompt_received(message: Message, state: FSMContext) -> None:
     """Handle MC prompt input."""
     lang = get_user_lang(message.from_user.id)
     await state.update_data(prompt=message.text)
-    await show_mc_orientation(message, state, lang)
+    await show_mc_mode(message, state, lang)
 
 
 @router.callback_query(F.data == "mc_prompt_skip")
@@ -661,36 +700,12 @@ async def mc_prompt_skip(callback: CallbackQuery, state: FSMContext) -> None:
     """Skip MC prompt."""
     lang = get_user_lang(callback.from_user.id)
     await state.update_data(prompt="")
-    await show_mc_orientation(callback.message, state, lang, edit=True)
+    await show_mc_mode(callback.message, state, lang, edit=True)
     await callback.answer()
 
 
-async def show_mc_orientation(message: Message, state: FSMContext, lang: str, edit: bool = False) -> None:
-    """Show MC orientation selection."""
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text=t("btn_orient_image", lang), callback_data="mc_orient_image"),
-            InlineKeyboardButton(text=t("btn_orient_video", lang), callback_data="mc_orient_video")
-        ],
-        [InlineKeyboardButton(text=t("btn_cancel", lang), callback_data="gen_cancel")]
-    ])
-    
-    if edit:
-        await message.edit_text(t("mc_orientation", lang), reply_markup=keyboard)
-    else:
-        await message.answer(t("mc_orientation", lang), reply_markup=keyboard)
-    
-    await state.set_state(MCStates.waiting_orientation)
-
-
-@router.callback_query(F.data.startswith("mc_orient_"))
-async def mc_orientation_selected(callback: CallbackQuery, state: FSMContext) -> None:
-    """Handle MC orientation selection."""
-    orientation = callback.data.split("_")[2]  # image or video
-    lang = get_user_lang(callback.from_user.id)
-    
-    await state.update_data(orientation=orientation)
-    
+async def show_mc_mode(message: Message, state: FSMContext, lang: str, edit: bool = False) -> None:
+    """Show MC mode (quality) selection."""
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="720p", callback_data="mc_mode_720p"),
@@ -699,9 +714,12 @@ async def mc_orientation_selected(callback: CallbackQuery, state: FSMContext) ->
         [InlineKeyboardButton(text=t("btn_cancel", lang), callback_data="gen_cancel")]
     ])
     
-    await callback.message.edit_text(t("mc_mode", lang), reply_markup=keyboard)
+    if edit:
+        await message.edit_text(t("mc_mode", lang), reply_markup=keyboard)
+    else:
+        await message.answer(t("mc_mode", lang), reply_markup=keyboard)
+    
     await state.set_state(MCStates.waiting_mode)
-    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("mc_mode_"))
