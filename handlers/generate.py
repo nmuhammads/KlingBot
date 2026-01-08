@@ -95,7 +95,7 @@ async def poll_task_and_send_result(
     Poll Kling API for task completion and send result to user.
     Runs as background task.
     """
-    max_attempts = 60  # 5 minutes max
+    max_attempts = 180  # 15 minutes max (Motion Control can take longer)
     poll_interval = 5  # seconds
     
     for attempt in range(max_attempts):
@@ -326,9 +326,10 @@ async def t2v_confirm(callback: CallbackQuery, state: FSMContext) -> None:
     duration = data.get("duration", "5")
     with_audio = data.get("with_audio", False)
     cost = data.get("cost", 55)
+    user_id = callback.from_user.id
     
     # Deduct balance
-    if not db.deduct_balance(callback.from_user.id, cost):
+    if not db.deduct_balance(user_id, cost):
         await callback.message.edit_text(
             t("insufficient_balance", lang, cost=cost, balance=0)
         )
@@ -336,17 +337,40 @@ async def t2v_confirm(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.answer()
         return
     
-    # Build callback URL
-    callback_url = f"{settings.webhook_url}/callback/kling" if settings.webhook_url else None
+    # Create generation record first to get ID for meta
+    generation = db.create_generation(
+        user_id=user_id,
+        prompt=prompt,
+        model=KlingModel.TEXT_TO_VIDEO.value,
+        provider_task_id="pending",
+        cost=cost,
+        video_duration=float(duration),
+        video_resolution=aspect_ratio
+    )
+    
+    generation_id = generation["id"] if generation else None
+    
+    # Build callback URL with query params
+    callback_url = None
+    if settings.webhook_url and generation_id:
+        callback_url = f"{settings.webhook_url}/callback/kling?generationId={generation_id}&userId={user_id}"
+    
+    # Build meta data for tracking
+    meta = {
+        "generationId": generation_id,
+        "tokens": cost,
+        "userId": user_id
+    }
     
     try:
-        # Create task
+        # Create task with meta
         response = await kling_client.create_text_to_video(
             prompt=prompt,
             duration=duration,
             aspect_ratio=aspect_ratio,
             sound=with_audio,
-            callback_url=callback_url
+            callback_url=callback_url,
+            meta=meta
         )
         
         task_id = response.get("data", {}).get("taskId")
@@ -354,30 +378,23 @@ async def t2v_confirm(callback: CallbackQuery, state: FSMContext) -> None:
         if not task_id:
             raise Exception("No taskId in response")
         
-        # Create generation record
-        generation = db.create_generation(
-            user_id=callback.from_user.id,
-            prompt=prompt,
-            model=KlingModel.TEXT_TO_VIDEO.value,
-            provider_task_id=task_id,
-            cost=cost,
-            video_duration=float(duration),
-            video_resolution=aspect_ratio
-        )
+        # Update generation with task ID
+        if generation_id:
+            db.update_generation(generation_id, "processing", provider_task_id=task_id)
         
         await callback.message.edit_text(t("generation_started", lang))
         await state.clear()
         await callback.answer()
         
         # Start polling in background
-        if generation:
+        if generation_id:
             asyncio.create_task(
                 poll_task_and_send_result(
                     callback.bot,
                     callback.message.chat.id,
                     task_id,
-                    generation["id"],
-                    callback.from_user.id,
+                    generation_id,
+                    user_id,
                     cost,
                     lang
                 )
@@ -386,7 +403,9 @@ async def t2v_confirm(callback: CallbackQuery, state: FSMContext) -> None:
     except Exception as e:
         logger.error(f"Error creating T2V task: {e}")
         # Refund on error
-        db.update_user_balance(callback.from_user.id, cost)
+        db.update_user_balance(user_id, cost)
+        if generation_id:
+            db.update_generation(generation_id, "fail", error_message=str(e))
         await callback.message.edit_text(t("error_generic", lang))
         await state.clear()
         await callback.answer()
@@ -529,8 +548,9 @@ async def i2v_confirm(callback: CallbackQuery, state: FSMContext) -> None:
     duration = data.get("duration", "5")
     with_audio = data.get("with_audio", False)
     cost = data.get("cost", 55)
+    user_id = callback.from_user.id
     
-    if not db.deduct_balance(callback.from_user.id, cost):
+    if not db.deduct_balance(user_id, cost):
         await callback.message.edit_text(
             t("insufficient_balance", lang, cost=cost, balance=0)
         )
@@ -538,7 +558,30 @@ async def i2v_confirm(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.answer()
         return
     
-    callback_url = f"{settings.webhook_url}/callback/kling" if settings.webhook_url else None
+    # Create generation record first to get ID for meta
+    generation = db.create_generation(
+        user_id=user_id,
+        prompt=prompt,
+        model=KlingModel.IMAGE_TO_VIDEO.value,
+        provider_task_id="pending",
+        cost=cost,
+        input_images=[image_url],
+        video_duration=float(duration)
+    )
+    
+    generation_id = generation["id"] if generation else None
+    
+    # Build callback URL with query params
+    callback_url = None
+    if settings.webhook_url and generation_id:
+        callback_url = f"{settings.webhook_url}/callback/kling?generationId={generation_id}&userId={user_id}"
+    
+    # Build meta data for tracking
+    meta = {
+        "generationId": generation_id,
+        "tokens": cost,
+        "userId": user_id
+    }
     
     try:
         response = await kling_client.create_image_to_video(
@@ -546,7 +589,8 @@ async def i2v_confirm(callback: CallbackQuery, state: FSMContext) -> None:
             prompt=prompt,
             duration=duration,
             sound=with_audio,
-            callback_url=callback_url
+            callback_url=callback_url,
+            meta=meta
         )
         
         task_id = response.get("data", {}).get("taskId")
@@ -554,28 +598,22 @@ async def i2v_confirm(callback: CallbackQuery, state: FSMContext) -> None:
         if not task_id:
             raise Exception("No taskId in response")
         
-        generation = db.create_generation(
-            user_id=callback.from_user.id,
-            prompt=prompt,
-            model=KlingModel.IMAGE_TO_VIDEO.value,
-            provider_task_id=task_id,
-            cost=cost,
-            input_images=[image_url],
-            video_duration=float(duration)
-        )
+        # Update generation with task ID
+        if generation_id:
+            db.update_generation(generation_id, "processing", provider_task_id=task_id)
         
         await callback.message.edit_text(t("generation_started", lang))
         await state.clear()
         await callback.answer()
         
-        if generation:
+        if generation_id:
             asyncio.create_task(
                 poll_task_and_send_result(
                     callback.bot,
                     callback.message.chat.id,
                     task_id,
-                    generation["id"],
-                    callback.from_user.id,
+                    generation_id,
+                    user_id,
                     cost,
                     lang
                 )
@@ -583,7 +621,9 @@ async def i2v_confirm(callback: CallbackQuery, state: FSMContext) -> None:
         
     except Exception as e:
         logger.error(f"Error creating I2V task: {e}")
-        db.update_user_balance(callback.from_user.id, cost)
+        db.update_user_balance(user_id, cost)
+        if generation_id:
+            db.update_generation(generation_id, "fail", error_message=str(e))
         await callback.message.edit_text(t("error_generic", lang))
         await state.clear()
         await callback.answer()
@@ -782,8 +822,9 @@ async def mc_confirm(callback: CallbackQuery, state: FSMContext) -> None:
     mode = data.get("mode", "720p")
     video_duration = data.get("video_duration", 5)
     cost = data.get("cost", 30)
+    user_id = callback.from_user.id
     
-    if not db.deduct_balance(callback.from_user.id, cost):
+    if not db.deduct_balance(user_id, cost):
         await callback.message.edit_text(
             t("insufficient_balance", lang, cost=cost, balance=0)
         )
@@ -791,7 +832,31 @@ async def mc_confirm(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.answer()
         return
     
-    callback_url = f"{settings.webhook_url}/callback/kling" if settings.webhook_url else None
+    # Create generation record first to get ID for meta
+    generation = db.create_generation(
+        user_id=user_id,
+        prompt=prompt,
+        model=KlingModel.MOTION_CONTROL.value,
+        provider_task_id="pending",
+        cost=cost,
+        input_images=[image_url],
+        video_duration=float(video_duration),
+        video_resolution=mode
+    )
+    
+    generation_id = generation["id"] if generation else None
+    
+    # Build callback URL with query params
+    callback_url = None
+    if settings.webhook_url and generation_id:
+        callback_url = f"{settings.webhook_url}/callback/kling?generationId={generation_id}&userId={user_id}"
+    
+    # Build meta data for tracking
+    meta = {
+        "generationId": generation_id,
+        "tokens": cost,
+        "userId": user_id
+    }
     
     try:
         response = await kling_client.create_motion_control(
@@ -800,7 +865,8 @@ async def mc_confirm(callback: CallbackQuery, state: FSMContext) -> None:
             prompt=prompt,
             character_orientation=orientation,
             mode=mode,
-            callback_url=callback_url
+            callback_url=callback_url,
+            meta=meta
         )
         
         task_id = response.get("data", {}).get("taskId")
@@ -808,29 +874,22 @@ async def mc_confirm(callback: CallbackQuery, state: FSMContext) -> None:
         if not task_id:
             raise Exception("No taskId in response")
         
-        generation = db.create_generation(
-            user_id=callback.from_user.id,
-            prompt=prompt,
-            model=KlingModel.MOTION_CONTROL.value,
-            provider_task_id=task_id,
-            cost=cost,
-            input_images=[image_url],
-            video_duration=float(video_duration),
-            video_resolution=mode
-        )
+        # Update generation with task ID
+        if generation_id:
+            db.update_generation(generation_id, "processing", provider_task_id=task_id)
         
         await callback.message.edit_text(t("generation_started", lang))
         await state.clear()
         await callback.answer()
         
-        if generation:
+        if generation_id:
             asyncio.create_task(
                 poll_task_and_send_result(
                     callback.bot,
                     callback.message.chat.id,
                     task_id,
-                    generation["id"],
-                    callback.from_user.id,
+                    generation_id,
+                    user_id,
                     cost,
                     lang
                 )
@@ -838,7 +897,9 @@ async def mc_confirm(callback: CallbackQuery, state: FSMContext) -> None:
         
     except Exception as e:
         logger.error(f"Error creating MC task: {e}")
-        db.update_user_balance(callback.from_user.id, cost)
+        db.update_user_balance(user_id, cost)
+        if generation_id:
+            db.update_generation(generation_id, "fail", error_message=str(e))
         await callback.message.edit_text(t("error_generic", lang))
         await state.clear()
         await callback.answer()

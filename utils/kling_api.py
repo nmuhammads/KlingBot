@@ -118,7 +118,8 @@ class KlingClient:
         duration: Literal["5", "10"] = "5",
         aspect_ratio: Literal["1:1", "16:9", "9:16"] = "16:9",
         sound: bool = False,
-        callback_url: Optional[str] = None
+        callback_url: Optional[str] = None,
+        meta: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Create a Text-to-Video generation task.
@@ -129,6 +130,7 @@ class KlingClient:
             aspect_ratio: Aspect ratio ('1:1', '16:9', '9:16')
             sound: Whether to generate video with audio
             callback_url: Optional URL for completion callback
+            meta: Optional metadata for tracking (generationId, tokens, userId)
         
         Returns:
             API response with taskId
@@ -146,7 +148,10 @@ class KlingClient:
         if callback_url:
             payload["callBackUrl"] = callback_url
         
-        logger.info(f"Creating T2V task: duration={duration}, aspect_ratio={aspect_ratio}, sound={sound}")
+        if meta:
+            payload["meta"] = meta
+        
+        logger.info(f"Creating T2V task: duration={duration}, aspect_ratio={aspect_ratio}, sound={sound}, meta={meta}")
         return await self._make_request("POST", "/jobs/createTask", json_data=payload)
     
     async def create_image_to_video(
@@ -155,7 +160,8 @@ class KlingClient:
         prompt: str = "",
         duration: Literal["5", "10"] = "5",
         sound: bool = False,
-        callback_url: Optional[str] = None
+        callback_url: Optional[str] = None,
+        meta: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Create an Image-to-Video generation task.
@@ -166,6 +172,7 @@ class KlingClient:
             duration: Video duration ('5' or '10' seconds)
             sound: Whether to generate video with audio
             callback_url: Optional URL for completion callback
+            meta: Optional metadata for tracking (generationId, tokens, userId)
         
         Returns:
             API response with taskId
@@ -183,7 +190,10 @@ class KlingClient:
         if callback_url:
             payload["callBackUrl"] = callback_url
         
-        logger.info(f"Creating I2V task: duration={duration}, sound={sound}")
+        if meta:
+            payload["meta"] = meta
+        
+        logger.info(f"Creating I2V task: duration={duration}, sound={sound}, meta={meta}")
         return await self._make_request("POST", "/jobs/createTask", json_data=payload)
     
     async def create_motion_control(
@@ -193,7 +203,8 @@ class KlingClient:
         prompt: str = "",
         character_orientation: Literal["image", "video"] = "video",
         mode: Literal["720p", "1080p"] = "720p",
-        callback_url: Optional[str] = None
+        callback_url: Optional[str] = None,
+        meta: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Create a Motion Control generation task.
@@ -205,6 +216,7 @@ class KlingClient:
             character_orientation: 'image' or 'video' orientation
             mode: Output resolution ('720p' or '1080p')
             callback_url: Optional URL for completion callback
+            meta: Optional metadata for tracking (generationId, tokens, userId)
         
         Returns:
             API response with taskId
@@ -223,7 +235,10 @@ class KlingClient:
         if callback_url:
             payload["callBackUrl"] = callback_url
         
-        logger.info(f"Creating Motion Control task: orientation={character_orientation}, mode={mode}")
+        if meta:
+            payload["meta"] = meta
+        
+        logger.info(f"Creating Motion Control task: orientation={character_orientation}, mode={mode}, meta={meta}")
         return await self._make_request("POST", "/jobs/createTask", json_data=payload)
     
     async def get_task_status(self, task_id: str) -> Dict[str, Any]:

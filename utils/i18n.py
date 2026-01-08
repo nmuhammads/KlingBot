@@ -116,8 +116,8 @@ MESSAGES: Dict[str, Dict[str, str]] = {
         "en": "💃 <b>Motion Control</b>\n\nSend a photo (face visible, head + shoulders + torso):"
     },
     "mc_orientation_detailed": {
-        "ru": "🔄 <b>Выберите ориентацию персонажа:</b>\n\n<b>🖼 Как на фото</b> — персонаж будет повёрнут так же, как на исходном фото.\n⚠️ Максимум <b>10 секунд</b> видео.\n\n<b>🎬 Как в видео</b> — персонаж повторит ориентацию актёра из референсного видео.\n✅ Максимум <b>30 секунд</b> видео.",
-        "en": "🔄 <b>Select character orientation:</b>\n\n<b>🖼 As in photo</b> — character will be oriented as in the source photo.\n⚠️ Maximum <b>10 seconds</b> video.\n\n<b>🎬 As in video</b> — character will follow the orientation of the actor in reference video.\n✅ Maximum <b>30 seconds</b> video."
+        "ru": "� <b>Выберите расположение персонажа:</b>\n\n<b>🖼 Как на фото</b> — персонаж будет повёрнут так же, как на исходном фото.\n⚠️ Максимум <b>10 секунд</b> видео.\n\n<b>🎬 Как в видео</b> — персонаж повторит расположение актёра из референсного видео.\n✅ Максимум <b>30 секунд</b> видео.",
+        "en": "� <b>Select character positioning:</b>\n\n<b>🖼 As in photo</b> — character will be positioned as in the source photo.\n⚠️ Maximum <b>10 seconds</b> video.\n\n<b>🎬 As in video</b> — character will follow the positioning of the actor in reference video.\n✅ Maximum <b>30 seconds</b> video."
     },
     "btn_orient_image_full": {
         "ru": "🖼 Как на фото (до 10 сек)",
@@ -136,12 +136,12 @@ MESSAGES: Dict[str, Dict[str, str]] = {
         "en": "🎬 Send a reference video with motions (3-{max_duration} sec):\n\n<b>📋 Requirements:</b>\n• Minimum 720p resolution\n• Format: MP4, MOV\n• Size: up to 100 MB\n• Video must clearly show head, shoulders and torso"
     },
     "mc_prompt": {
-        "ru": "📝 Отправьте описание (опционально):",
-        "en": "📝 Send a description (optional):"
+        "ru": "📝 Отправьте описание (опционально):\n\n💡 <b>Совет:</b> В промпте можно описать изменения — например, другую одежду, аксессуары или окружение.",
+        "en": "📝 Send a description (optional):\n\n💡 <b>Tip:</b> Use the prompt to describe changes — like different clothes, accessories, or environment."
     },
     "mc_orientation": {
-        "ru": "🔄 Выберите ориентацию персонажа:",
-        "en": "🔄 Select character orientation:"
+        "ru": "� Выберите расположение персонажа:",
+        "en": "� Select character positioning:"
     },
     "btn_orient_image": {
         "ru": "🖼 Как на фото",

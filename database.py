@@ -219,7 +219,8 @@ class Database:
         generation_id: int,
         status: str,
         video_url: Optional[str] = None,
-        error_message: Optional[str] = None
+        error_message: Optional[str] = None,
+        provider_task_id: Optional[str] = None
     ) -> bool:
         """Update generation status and result."""
         try:
@@ -232,6 +233,8 @@ class Database:
                 update_data["video_url"] = video_url
             if error_message:
                 update_data["error_message"] = error_message
+            if provider_task_id:
+                update_data["provider_task_id"] = provider_task_id
             
             self.client.table("generations").update(update_data).eq("id", generation_id).execute()
             return True
