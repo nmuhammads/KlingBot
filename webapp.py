@@ -62,10 +62,15 @@ app = FastAPI(title="KlingBot", lifespan=lifespan)
 async def webhook_handler(request: Request) -> Response:
     """Handle incoming Telegram updates via webhook."""
     try:
-        update = types.Update.model_validate(await request.json())
+        body = await request.json()
+        logger.info(f"Received update: {body.get('update_id', 'unknown')}")
+        
+        update = types.Update.model_validate(body)
         await dp.feed_update(bot, update)
+        
+        logger.info(f"Update {body.get('update_id', 'unknown')} processed successfully")
     except Exception as e:
-        logger.error(f"Error processing update: {e}")
+        logger.error(f"Error processing update: {e}", exc_info=True)
     return Response(status_code=200)
 
 

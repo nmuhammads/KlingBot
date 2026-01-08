@@ -39,19 +39,26 @@ async def cmd_start(message: Message, command: CommandObject) -> None:
     - Records bot subscription
     - Shows welcome message
     """
+    logger.info(f"Received /start from user {message.from_user.id}")
+    
     user = message.from_user
     args = command.args  # Referral code from deep link
     
-    # Get or create user with referral
-    db_user = db.get_or_create_user(
-        user_id=user.id,
-        username=user.username,
-        first_name=user.first_name,
-        last_name=user.last_name,
-        language_code=user.language_code,
-        is_premium=user.is_premium or False,
-        ref=args  # Will be processed (ref_username -> username)
-    )
+    try:
+        # Get or create user with referral
+        db_user = db.get_or_create_user(
+            user_id=user.id,
+            username=user.username,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            language_code=user.language_code,
+            is_premium=user.is_premium or False,
+            ref=args  # Will be processed (ref_username -> username)
+        )
+        logger.info(f"User {user.id} retrieved/created successfully")
+    except Exception as e:
+        logger.error(f"Error creating/retrieving user: {e}", exc_info=True)
+        db_user = {"balance": 0, "language_code": "ru"}
     
     # Record bot subscription for this user
     try:
@@ -71,10 +78,14 @@ async def cmd_start(message: Message, command: CommandObject) -> None:
     balance = db_user.get("balance", 0)
     
     # Send welcome message
-    await message.answer(
-        t("welcome", lang, balance=balance),
-        reply_markup=get_main_keyboard(lang)
-    )
+    try:
+        await message.answer(
+            t("welcome", lang, balance=balance),
+            reply_markup=get_main_keyboard(lang)
+        )
+        logger.info(f"Welcome message sent to user {message.from_user.id}")
+    except Exception as e:
+        logger.error(f"Error sending welcome message: {e}", exc_info=True)
 
 
 @router.message(Command("help"))
