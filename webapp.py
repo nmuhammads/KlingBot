@@ -37,6 +37,18 @@ async def lifespan(app: FastAPI):
     dp.include_router(profile.router)
     dp.include_router(topup.router)
     
+    # Register bot commands
+    commands = [
+        types.BotCommand(command="start", description="🏠 Главное меню"),
+        types.BotCommand(command="generate", description="🎬 Сгенерировать видео"),
+        types.BotCommand(command="profile", description="👤 Профиль"),
+        types.BotCommand(command="topup", description="💳 Пополнить баланс"),
+        types.BotCommand(command="help", description="❓ Помощь"),
+        types.BotCommand(command="lang", description="🌐 Сменить язык"),
+    ]
+    await bot.set_my_commands(commands)
+    logger.info("Bot commands registered")
+    
     # Set webhook if URL is configured
     if settings.webhook_url:
         webhook_url = f"{settings.webhook_url}/webhook"

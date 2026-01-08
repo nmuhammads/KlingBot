@@ -115,9 +115,9 @@ async def poll_task_and_send_result(
                     # Update generation in DB
                     db.update_generation(generation_id, "success", video_url=video_url)
                     
-                    # Send video to user
+                    # Send video to user as document (file)
                     await bot.send_message(chat_id, t("generation_success", lang))
-                    await bot.send_video(chat_id, video_url)
+                    await bot.send_document(chat_id, video_url)
                     return
                     
             elif state == TaskState.FAIL.value:
@@ -411,7 +411,6 @@ async def i2v_image_received(message: Message, state: FSMContext) -> None:
         return
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=t("btn_skip", lang), callback_data="i2v_prompt_skip")],
         [InlineKeyboardButton(text=t("btn_cancel", lang), callback_data="gen_cancel")]
     ])
     
@@ -430,11 +429,10 @@ async def i2v_prompt_received(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(F.data == "i2v_prompt_skip")
 async def i2v_prompt_skip(callback: CallbackQuery, state: FSMContext) -> None:
-    """Skip I2V prompt."""
+    """Skip I2V prompt - disabled, prompt is required."""
+    # This handler is kept for backwards compatibility but prompt is now required
     lang = get_user_lang(callback.from_user.id)
-    await state.update_data(prompt="")
-    await show_i2v_duration(callback.message, state, lang, edit=True)
-    await callback.answer()
+    await callback.answer(t("error_generic", lang))
 
 
 async def show_i2v_duration(message: Message, state: FSMContext, lang: str, edit: bool = False) -> None:

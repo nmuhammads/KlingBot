@@ -102,8 +102,8 @@ MESSAGES: Dict[str, Dict[str, str]] = {
         "en": "🖼 <b>Image to Video</b>\n\nSend an image to animate:"
     },
     "i2v_prompt": {
-        "ru": "📝 Отправьте описание движения (или нажмите Пропустить):",
-        "en": "📝 Send a motion description (or press Skip):"
+        "ru": "📝 Введите текст-промпт (опишите желаемый сценарий):",
+        "en": "📝 Enter a text prompt (describe the desired scenario):"
     },
     "btn_skip": {
         "ru": "⏭ Пропустить",
