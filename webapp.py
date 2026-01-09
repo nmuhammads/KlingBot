@@ -180,15 +180,15 @@ async def kling_callback(request: Request):
                     except Exception as e:
                         logger.error(f"Error sending callback result: {e}")
                 
-                # Update generation status to success
-                db.update_generation(int(generation_id), "success", video_url=video_url)
+                # Update generation status to completed
+                db.update_generation(int(generation_id), "completed", video_url=video_url)
                 
         elif state == "fail":
             fail_msg = data.get("failMsg", "Unknown error")
             current_status = generation.get("status")
             
-            # Only process if not already success (don't override good state)
-            if current_status != "success":
+            # Only process if not already completed (don't override good state)
+            if current_status != "completed":
                 db.update_generation(int(generation_id), "fail", error_message=fail_msg)
                 
                 # Refund if not already refunded (status was still processing or pending)

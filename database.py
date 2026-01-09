@@ -170,7 +170,7 @@ class Database:
         user_id: int,
         prompt: str,
         model: str,
-        provider_task_id: str,
+        task_id: str,
         cost: int,
         media_type: str = "video",
         input_images: Optional[List[str]] = None,
@@ -184,7 +184,7 @@ class Database:
             user_id: Telegram user ID
             prompt: Generation prompt
             model: Model name (e.g., 'kling-2.6/text-to-video')
-            provider_task_id: Task ID from Kling API
+            task_id: Task ID from Kling API
             cost: Cost in tokens
             media_type: Type of media ('video')
             input_images: List of input image URLs
@@ -199,7 +199,7 @@ class Database:
                 "user_id": user_id,
                 "prompt": prompt,
                 "model": model,
-                "provider_task_id": provider_task_id,
+                "task_id": task_id,
                 "cost": cost,
                 "status": "pending",
                 "media_type": media_type,
@@ -220,7 +220,7 @@ class Database:
         status: str,
         video_url: Optional[str] = None,
         error_message: Optional[str] = None,
-        provider_task_id: Optional[str] = None
+        task_id: Optional[str] = None
     ) -> bool:
         """Update generation status and result."""
         try:
@@ -233,8 +233,8 @@ class Database:
                 update_data["video_url"] = video_url
             if error_message:
                 update_data["error_message"] = error_message
-            if provider_task_id:
-                update_data["provider_task_id"] = provider_task_id
+            if task_id:
+                update_data["task_id"] = task_id
             
             self.client.table("generations").update(update_data).eq("id", generation_id).execute()
             return True
@@ -242,13 +242,13 @@ class Database:
             logger.error(f"Error updating generation {generation_id}: {e}")
             return False
     
-    def get_generation_by_task_id(self, provider_task_id: str) -> Optional[Dict[str, Any]]:
-        """Get generation by provider task ID."""
+    def get_generation_by_task_id(self, task_id: str) -> Optional[Dict[str, Any]]:
+        """Get generation by task ID."""
         try:
-            result = self.client.table("generations").select("*").eq("provider_task_id", provider_task_id).execute()
+            result = self.client.table("generations").select("*").eq("task_id", task_id).execute()
             return self._first(result.data)
         except Exception as e:
-            logger.error(f"Error getting generation by task ID {provider_task_id}: {e}")
+            logger.error(f"Error getting generation by task ID {task_id}: {e}")
             return None
     
     def get_generation(self, generation_id: int) -> Optional[Dict[str, Any]]:

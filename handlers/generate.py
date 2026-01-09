@@ -113,7 +113,7 @@ async def poll_task_and_send_result(
                     video_url = result_urls[0]
                     
                     # Update generation in DB
-                    db.update_generation(generation_id, "success", video_url=video_url)
+                    db.update_generation(generation_id, "completed", video_url=video_url)
                     
                     # Send video to user as document (file)
                     await bot.send_message(chat_id, t("generation_success", lang))
@@ -359,7 +359,7 @@ async def t2v_confirm(callback: CallbackQuery, state: FSMContext) -> None:
         user_id=user_id,
         prompt=prompt,
         model=KlingModel.TEXT_TO_VIDEO.value,
-        provider_task_id="pending",
+        task_id="pending",
         cost=cost,
         video_duration=float(duration),
         video_resolution=aspect_ratio
@@ -397,7 +397,7 @@ async def t2v_confirm(callback: CallbackQuery, state: FSMContext) -> None:
         
         # Update generation with task ID
         if generation_id:
-            db.update_generation(generation_id, "pending", provider_task_id=task_id)
+            db.update_generation(generation_id, "pending", task_id=task_id)
         
         await callback.message.edit_text(t("generation_started", lang))
         await state.clear()
@@ -590,7 +590,7 @@ async def i2v_confirm(callback: CallbackQuery, state: FSMContext) -> None:
         user_id=user_id,
         prompt=prompt,
         model=KlingModel.IMAGE_TO_VIDEO.value,
-        provider_task_id="pending",
+        task_id="pending",
         cost=cost,
         input_images=[image_url],
         video_duration=float(duration)
@@ -627,7 +627,7 @@ async def i2v_confirm(callback: CallbackQuery, state: FSMContext) -> None:
         
         # Update generation with task ID
         if generation_id:
-            db.update_generation(generation_id, "pending", provider_task_id=task_id)
+            db.update_generation(generation_id, "pending", task_id=task_id)
         
         await callback.message.edit_text(t("generation_started", lang))
         await state.clear()
@@ -874,7 +874,7 @@ async def mc_confirm(callback: CallbackQuery, state: FSMContext) -> None:
         user_id=user_id,
         prompt=prompt,
         model=KlingModel.MOTION_CONTROL.value,
-        provider_task_id="pending",
+        task_id="pending",
         cost=cost,
         input_images=[image_url],
         video_duration=float(video_duration),
@@ -913,7 +913,7 @@ async def mc_confirm(callback: CallbackQuery, state: FSMContext) -> None:
         
         # Update generation with task ID
         if generation_id:
-            db.update_generation(generation_id, "pending", provider_task_id=task_id)
+            db.update_generation(generation_id, "pending", task_id=task_id)
         
         await callback.message.edit_text(t("generation_started", lang))
         await state.clear()
