@@ -873,7 +873,7 @@ async def mc_confirm(callback: CallbackQuery, state: FSMContext) -> None:
     generation = db.create_generation(
         user_id=user_id,
         prompt=prompt,
-        model=KlingModel.MOTION_CONTROL.value,
+        model="kling-mc",
         task_id="pending",
         cost=cost,
         input_images=[image_url],
