@@ -251,6 +251,15 @@ class Database:
             logger.error(f"Error getting generation by task ID {provider_task_id}: {e}")
             return None
     
+    def get_generation(self, generation_id: int) -> Optional[Dict[str, Any]]:
+        """Get generation by ID."""
+        try:
+            result = self.client.table("generations").select("*").eq("id", generation_id).execute()
+            return self._first(result.data)
+        except Exception as e:
+            logger.error(f"Error getting generation {generation_id}: {e}")
+            return None
+    
     def get_user_generations(self, user_id: int, limit: int = 10) -> List[Dict[str, Any]]:
         """Get user's recent generations."""
         try:

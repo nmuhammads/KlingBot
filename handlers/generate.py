@@ -19,7 +19,7 @@ from aiogram.types import (
 from database import db
 from config import settings
 from utils.i18n import t
-from utils.kling_api import kling_client, KlingPricing, KlingModel, TaskState
+from utils.kling_api import kling_client, KlingPricing, KlingModel, TaskState, KlingApiError
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -95,7 +95,7 @@ async def poll_task_and_send_result(
     Poll Kling API for task completion and send result to user.
     Runs as background task.
     """
-    max_attempts = 180  # 15 minutes max (Motion Control can take longer)
+    max_attempts = 300  # 25 minutes max (Motion Control can take 20+ min)
     poll_interval = 5  # seconds
     
     for attempt in range(max_attempts):
@@ -139,10 +139,27 @@ async def poll_task_and_send_result(
         except Exception as e:
             logger.error(f"Error polling task {task_id}: {e}")
     
-    # Timeout - refund and notify
-    db.update_generation(generation_id, "fail", error_message="Timeout")
-    db.update_user_balance(user_id, cost)
-    await bot.send_message(chat_id, t("generation_failed", lang, error="Timeout"))
+    # Timeout - keep status as pending, don't refund
+    # User will check status in app, app will query API and complete/fail generation
+    logger.warning(f"Polling timeout for generation {generation_id}, task {task_id}. User should check app.")
+    
+    # Notify user to check app
+    try:
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(
+                text="📱 Открыть профиль в приложении" if lang == "ru" else "📱 Open profile in app",
+                url="https://t.me/AiVerseAppBot?startapp=profile"
+            )]
+        ])
+        
+        if lang == "ru":
+            msg = "⏳ Генерация занимает больше времени чем обычно.\n\nПожалуйста, проверьте статус в вашем профиле в приложении:"
+        else:
+            msg = "⏳ Generation is taking longer than usual.\n\nPlease check the status in your profile in the app:"
+        
+        await bot.send_message(chat_id, msg, reply_markup=keyboard)
+    except Exception as e:
+        logger.error(f"Error sending timeout notification: {e}")
 
 
 # ==================== Mode Selection ====================
@@ -380,7 +397,7 @@ async def t2v_confirm(callback: CallbackQuery, state: FSMContext) -> None:
         
         # Update generation with task ID
         if generation_id:
-            db.update_generation(generation_id, "processing", provider_task_id=task_id)
+            db.update_generation(generation_id, "pending", provider_task_id=task_id)
         
         await callback.message.edit_text(t("generation_started", lang))
         await state.clear()
@@ -399,6 +416,16 @@ async def t2v_confirm(callback: CallbackQuery, state: FSMContext) -> None:
                     lang
                 )
             )
+        
+    except KlingApiError as e:
+        logger.error(f"Kling API error creating T2V task: {e.code} - {e.message}")
+        db.update_user_balance(user_id, cost)
+        if generation_id:
+            db.update_generation(generation_id, "fail", error_message=f"API Error {e.code}: {e.message}")
+        user_msg = e.get_user_message(lang)
+        await callback.message.edit_text(f"❌ {user_msg}")
+        await state.clear()
+        await callback.answer()
         
     except Exception as e:
         logger.error(f"Error creating T2V task: {e}")
@@ -600,7 +627,7 @@ async def i2v_confirm(callback: CallbackQuery, state: FSMContext) -> None:
         
         # Update generation with task ID
         if generation_id:
-            db.update_generation(generation_id, "processing", provider_task_id=task_id)
+            db.update_generation(generation_id, "pending", provider_task_id=task_id)
         
         await callback.message.edit_text(t("generation_started", lang))
         await state.clear()
@@ -618,6 +645,16 @@ async def i2v_confirm(callback: CallbackQuery, state: FSMContext) -> None:
                     lang
                 )
             )
+        
+    except KlingApiError as e:
+        logger.error(f"Kling API error creating I2V task: {e.code} - {e.message}")
+        db.update_user_balance(user_id, cost)
+        if generation_id:
+            db.update_generation(generation_id, "fail", error_message=f"API Error {e.code}: {e.message}")
+        user_msg = e.get_user_message(lang)
+        await callback.message.edit_text(f"❌ {user_msg}")
+        await state.clear()
+        await callback.answer()
         
     except Exception as e:
         logger.error(f"Error creating I2V task: {e}")
@@ -876,7 +913,7 @@ async def mc_confirm(callback: CallbackQuery, state: FSMContext) -> None:
         
         # Update generation with task ID
         if generation_id:
-            db.update_generation(generation_id, "processing", provider_task_id=task_id)
+            db.update_generation(generation_id, "pending", provider_task_id=task_id)
         
         await callback.message.edit_text(t("generation_started", lang))
         await state.clear()
@@ -894,6 +931,18 @@ async def mc_confirm(callback: CallbackQuery, state: FSMContext) -> None:
                     lang
                 )
             )
+        
+    except KlingApiError as e:
+        logger.error(f"Kling API error creating MC task: {e.code} - {e.message}")
+        db.update_user_balance(user_id, cost)
+        if generation_id:
+            db.update_generation(generation_id, "fail", error_message=f"API Error {e.code}: {e.message}")
+        
+        # Show user-friendly error message
+        user_msg = e.get_user_message(lang)
+        await callback.message.edit_text(f"❌ {user_msg}")
+        await state.clear()
+        await callback.answer()
         
     except Exception as e:
         logger.error(f"Error creating MC task: {e}")

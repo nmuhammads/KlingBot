@@ -29,6 +29,68 @@ class TaskState(str, Enum):
     FAIL = "fail"
 
 
+class KlingApiError(Exception):
+    """
+    Kling API error with detailed code handling.
+    
+    Error codes from documentation:
+    - 200: Success
+    - 401: Unauthorized - Authentication credentials are missing or invalid
+    - 402: Insufficient Credits - Account does not have enough credits
+    - 404: Not Found - The requested resource or endpoint does not exist
+    - 422: Validation Error - The request parameters failed validation checks
+    - 429: Rate Limited - Request limit has been exceeded
+    - 455: Service Unavailable - System is currently undergoing maintenance
+    - 500: Server Error - An unexpected error occurred
+    - 501: Generation Failed - Content generation task failed
+    - 505: Feature Disabled - The requested feature is currently disabled
+    """
+    ERROR_CODES = {
+        200: "Success",
+        401: "Unauthorized - Invalid API key",
+        402: "Insufficient Credits",
+        404: "Not Found",
+        422: "Validation Error - Invalid parameters",
+        429: "Rate Limited - Too many requests",
+        455: "Service Unavailable - Maintenance",
+        500: "Server Error",
+        501: "Generation Failed",
+        505: "Feature Disabled"
+    }
+    
+    def __init__(self, code: int, message: str = None):
+        self.code = code
+        self.message = message or self.ERROR_CODES.get(code, "Unknown error")
+        super().__init__(f"Kling API Error {code}: {self.message}")
+    
+    def get_user_message(self, lang: str = "ru") -> str:
+        """Get user-friendly error message."""
+        messages_ru = {
+            401: "Ошибка авторизации. Попробуйте позже.",
+            402: "Недостаточно кредитов на стороне провайдера.",
+            404: "Ресурс не найден.",
+            422: "Неверные параметры запроса.",
+            429: "Превышен лимит запросов. Попробуйте через минуту.",
+            455: "Сервис на обслуживании. Попробуйте позже.",
+            500: "Ошибка сервера. Попробуйте позже.",
+            501: "Генерация не удалась.",
+            505: "Функция временно недоступна."
+        }
+        messages_en = {
+            401: "Authorization error. Try again later.",
+            402: "Insufficient credits on provider side.",
+            404: "Resource not found.",
+            422: "Invalid request parameters.",
+            429: "Rate limit exceeded. Try again in a minute.",
+            455: "Service is under maintenance. Try again later.",
+            500: "Server error. Try again later.",
+            501: "Generation failed.",
+            505: "Feature is temporarily unavailable."
+        }
+        messages = messages_ru if lang == "ru" else messages_en
+        return messages.get(self.code, self.message)
+
+
 @dataclass
 class KlingPricing:
     """Pricing configuration for Kling generations."""
@@ -88,9 +150,25 @@ class KlingClient:
         method: str,
         endpoint: str,
         json_data: Optional[Dict] = None,
-        params: Optional[Dict] = None
+        params: Optional[Dict] = None,
+        validate_data: bool = True
     ) -> Dict[str, Any]:
-        """Make HTTP request to Kling API."""
+        """
+        Make HTTP request to Kling API.
+        
+        Args:
+            method: HTTP method (GET or POST)
+            endpoint: API endpoint
+            json_data: JSON body for POST requests
+            params: Query parameters for GET requests
+            validate_data: If True, validate that response contains 'data' field
+        
+        Returns:
+            API response as dict
+            
+        Raises:
+            KlingApiError: If API returns error code or invalid response
+        """
         url = f"{self.base_url}{endpoint}"
         
         async with httpx.AsyncClient(timeout=60.0) as client:
@@ -103,10 +181,42 @@ class KlingClient:
                     raise ValueError(f"Unsupported method: {method}")
                 
                 response.raise_for_status()
-                return response.json()
+                
+                # Parse JSON response
+                json_response = response.json()
+                
+                # Check for None/empty response
+                if json_response is None:
+                    logger.error(f"Empty response from Kling API: {endpoint}")
+                    raise KlingApiError(500, "Empty response from API")
+                
+                # Check API-level error codes
+                code = json_response.get("code", 200)
+                if code != 200:
+                    msg = json_response.get("msg", "Unknown error")
+                    logger.error(f"Kling API error {code}: {msg}")
+                    raise KlingApiError(code, msg)
+                
+                # Validate data field exists (for create/query operations)
+                if validate_data:
+                    data = json_response.get("data")
+                    if data is None:
+                        logger.error(f"No data in Kling API response: {json_response}")
+                        raise KlingApiError(500, "No data in API response")
+                
+                return json_response
                 
             except httpx.HTTPStatusError as e:
                 logger.error(f"HTTP error from Kling API: {e.response.status_code} - {e.response.text}")
+                # Try to parse error response
+                try:
+                    error_body = e.response.json()
+                    code = error_body.get("code", e.response.status_code)
+                    msg = error_body.get("msg", e.response.text)
+                    raise KlingApiError(code, msg)
+                except (ValueError, KeyError):
+                    raise KlingApiError(e.response.status_code, e.response.text)
+            except KlingApiError:
                 raise
             except Exception as e:
                 logger.error(f"Error making request to Kling API: {e}")
