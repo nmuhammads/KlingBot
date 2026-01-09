@@ -11,10 +11,11 @@ from aiogram import Router, F, Bot
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import (
     Message, CallbackQuery,
-    InlineKeyboardMarkup, InlineKeyboardButton
+    InlineKeyboardMarkup, InlineKeyboardButton,
+    BufferedInputFile
 )
+import httpx
 
 from database import db
 from config import settings
@@ -115,9 +116,31 @@ async def poll_task_and_send_result(
                     # Update generation in DB
                     db.update_generation(generation_id, "completed", video_url=video_url)
                     
-                    # Send video to user as document (file)
-                    await bot.send_message(chat_id, t("generation_success", lang))
-                    await bot.send_document(chat_id, video_url)
+                    # Send video to user
+                    success_msg = t("generation_success", lang)
+                    try:
+                        # Try sending as document with caption
+                        await bot.send_document(chat_id, video_url, caption=success_msg)
+                    except Exception as send_err:
+                        logger.error(f"Error sending video by URL for task {task_id}: {send_err}")
+                        # Fallback: download and send
+                        try:
+                            async with httpx.AsyncClient() as client:
+                                file_resp = await client.get(video_url)
+                                file_resp.raise_for_status()
+                                video_bytes = file_resp.content
+                                
+                                input_file = BufferedInputFile(video_bytes, filename=f"video_{task_id}.mp4")
+                                await bot.send_document(chat_id, input_file, caption=success_msg)
+                        except Exception as e:
+                            logger.error(f"Error downloading/sending video file: {e}")
+                            # Last resort: just text
+                            try:
+                                fallback_msg = f"{success_msg}\n\n📥 {video_url}"
+                                await bot.send_message(chat_id, fallback_msg)
+                            except Exception:
+                                pass
+                    
                     return
                     
             elif state == TaskState.FAIL.value:
