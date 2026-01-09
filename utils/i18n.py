@@ -168,8 +168,8 @@ MESSAGES: Dict[str, Dict[str, str]] = {
     
     # Generation status
     "generation_started": {
-        "ru": "⏳ <b>Генерация запущена!</b>\n\nЭто может занять 1-3 минуты. Я пришлю результат, когда всё будет готово.",
-        "en": "⏳ <b>Generation started!</b>\n\nThis may take 1-3 minutes. I'll send the result when it's ready."
+        "ru": "⏳ <b>Генерация запущена!</b>\n\nЭто может занять до 30 минут. Я пришлю результат, когда всё будет готово.",
+        "en": "⏳ <b>Generation started!</b>\n\nThis may take up to 30 minutes. I'll send the result when it's ready."
     },
     "generation_success": {
         "ru": "✅ <b>Готово!</b>\n\nВаше видео сгенерировано:",
