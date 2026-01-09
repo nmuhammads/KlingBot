@@ -87,6 +87,9 @@ class KlingApiError(Exception):
             501: "Generation failed.",
             505: "Feature is temporarily unavailable."
         }
+        if "video resolution must be at least" in str(self.message).lower():
+            return "Разрешение видео должно быть не менее 720x720." if lang == "ru" else "Video resolution must be at least 720x720."
+
         messages = messages_ru if lang == "ru" else messages_en
         return messages.get(self.code, self.message)
 
