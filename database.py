@@ -71,6 +71,19 @@ class Database:
                 if is_premium != existing.get("is_premium"):
                     update_data["is_premium"] = is_premium
                 
+                # Update referral if provided and user has no referrer
+                if ref and not existing.get("ref"):
+                    # Process referral code
+                    ref_username = None
+                    if ref.startswith("ref_"):
+                        ref_username = ref[4:]
+                    else:
+                        ref_username = ref
+                    
+                    if ref_username and ref_username != existing.get("username"):  # Prevent self-referral
+                        update_data["ref"] = ref_username
+                        logger.info(f"Updated referrer for existing user {user_id}: {ref_username}")
+
                 if update_data:
                     update_data["updated_at"] = datetime.utcnow().isoformat()
                     self.client.table("users").update(update_data).eq("user_id", user_id).execute()
