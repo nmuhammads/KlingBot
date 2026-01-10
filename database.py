@@ -284,6 +284,26 @@ class Database:
         except Exception as e:
             logger.error(f"Error getting generations for user {user_id}: {e}")
             return []
+    
+    def has_active_generation(self, user_id: int) -> bool:
+        """
+        Check if user has an active (pending or processing) generation.
+        Used to limit users to 1 concurrent generation.
+        
+        Returns:
+            True if user has active generation, False otherwise
+        """
+        try:
+            result = self.client.table("generations")\
+                .select("id")\
+                .eq("user_id", user_id)\
+                .in_("status", ["pending", "processing"])\
+                .limit(1)\
+                .execute()
+            return len(result.data) > 0
+        except Exception as e:
+            logger.error(f"Error checking active generation for user {user_id}: {e}")
+            return False  # Allow generation on error
 
 
 # Global database instance

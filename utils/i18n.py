@@ -256,6 +256,16 @@ MESSAGES: Dict[str, Dict[str, str]] = {
     "cancelled": {
         "ru": "❌ Действие отменено.",
         "en": "❌ Action cancelled."
+    },
+    
+    # Limits
+    "active_generation_limit": {
+        "ru": "⏳ <b>У вас уже есть активная генерация!</b>\n\nДождитесь её завершения, прежде чем запускать новую.",
+        "en": "⏳ <b>You already have an active generation!</b>\n\nPlease wait for it to complete before starting a new one."
+    },
+    "error_prompt_too_long": {
+        "ru": "❌ Промпт слишком длинный (максимум 2500 символов).\n\nВаш текст: {length} символов.",
+        "en": "❌ Prompt too long (maximum 2500 characters).\n\nYour text: {length} characters."
     }
 }
 

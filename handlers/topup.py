@@ -39,19 +39,22 @@ def make_hub_link(method: str, amount: int) -> str:
     return f"https://t.me/{settings.hub_bot_username}?start={payload}"
 
 
+def get_payment_methods_keyboard(lang: str) -> InlineKeyboardMarkup:
+    """Create payment methods selection keyboard."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=t("btn_stars", lang), callback_data="topup_method_stars")],
+        [InlineKeyboardButton(text=t("btn_sbp", lang), callback_data="topup_method_sbp")],
+        [InlineKeyboardButton(text=t("btn_card", lang), callback_data="topup_method_card")]
+    ])
+
+
 @router.message(Command("topup"))
 async def cmd_topup(message: Message) -> None:
     """Handle /topup command - show payment methods."""
     user = db.get_user(message.from_user.id)
     lang = user.get("language_code", "ru") if user else "ru"
     
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=t("btn_stars", lang), callback_data="topup_method_stars")],
-        [InlineKeyboardButton(text=t("btn_sbp", lang), callback_data="topup_method_sbp")],
-        [InlineKeyboardButton(text=t("btn_card", lang), callback_data="topup_method_card")]
-    ])
-    
-    await message.answer(t("topup_method", lang), reply_markup=keyboard)
+    await message.answer(t("topup_method", lang), reply_markup=get_payment_methods_keyboard(lang))
 
 
 @router.callback_query(F.data.startswith("topup_method_"))
@@ -88,11 +91,6 @@ async def callback_topup_back(callback) -> None:
     user = db.get_user(callback.from_user.id)
     lang = user.get("language_code", "ru") if user else "ru"
     
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=t("btn_stars", lang), callback_data="topup_method_stars")],
-        [InlineKeyboardButton(text=t("btn_sbp", lang), callback_data="topup_method_sbp")],
-        [InlineKeyboardButton(text=t("btn_card", lang), callback_data="topup_method_card")]
-    ])
-    
-    await callback.message.edit_text(t("topup_method", lang), reply_markup=keyboard)
+    await callback.message.edit_text(t("topup_method", lang), reply_markup=get_payment_methods_keyboard(lang))
     await callback.answer()
+

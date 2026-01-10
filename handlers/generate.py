@@ -251,6 +251,11 @@ async def t2v_prompt_received(message: Message, state: FSMContext) -> None:
     """Handle T2V prompt input."""
     lang = get_user_lang(message.from_user.id)
     
+    # Validate prompt length
+    if len(message.text) > 2500:
+        await message.answer(t("error_prompt_too_long", lang, length=len(message.text)))
+        return
+    
     await state.update_data(prompt=message.text)
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -368,6 +373,13 @@ async def t2v_confirm(callback: CallbackQuery, state: FSMContext) -> None:
     with_audio = data.get("with_audio", False)
     cost = data.get("cost", 55)
     user_id = callback.from_user.id
+    
+    # Check for active generation
+    if db.has_active_generation(user_id):
+        await callback.message.edit_text(t("active_generation_limit", lang), parse_mode="HTML")
+        await state.clear()
+        await callback.answer()
+        return
     
     # Deduct balance
     if not db.deduct_balance(user_id, cost):
@@ -600,6 +612,13 @@ async def i2v_confirm(callback: CallbackQuery, state: FSMContext) -> None:
     with_audio = data.get("with_audio", False)
     cost = data.get("cost", 55)
     user_id = callback.from_user.id
+    
+    # Check for active generation
+    if db.has_active_generation(user_id):
+        await callback.message.edit_text(t("active_generation_limit", lang), parse_mode="HTML")
+        await state.clear()
+        await callback.answer()
+        return
     
     if not db.deduct_balance(user_id, cost):
         await callback.message.edit_text(
@@ -884,6 +903,13 @@ async def mc_confirm(callback: CallbackQuery, state: FSMContext) -> None:
     video_duration = data.get("video_duration", 5)
     cost = data.get("cost", 30)
     user_id = callback.from_user.id
+    
+    # Check for active generation
+    if db.has_active_generation(user_id):
+        await callback.message.edit_text(t("active_generation_limit", lang), parse_mode="HTML")
+        await state.clear()
+        await callback.answer()
+        return
     
     if not db.deduct_balance(user_id, cost):
         await callback.message.edit_text(
