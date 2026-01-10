@@ -201,6 +201,10 @@ async def kling_callback(request: Request):
                     except Exception as e:
                         logger.error(f"Error sending callback result: {e}")
                 
+                elif current_status == "completed":
+                    # Already processed by polling or previous callback
+                    logger.info(f"Generation {generation_id} already completed, skipping callback send")
+                
                 # Update generation status to completed
                 db.update_generation(int(generation_id), "completed", video_url=video_url)
                 

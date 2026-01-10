@@ -114,6 +114,13 @@ async def poll_task_and_send_result(
             state = data.get("state")
             
             if state == TaskState.SUCCESS.value:
+                # Check if already processed by callback
+                gen = db.get_generation(generation_id)
+                if gen and gen.get("status") == "completed":
+                    logger.info(f"Generation {generation_id} already completed by callback, skipping")
+                    await cleanup_r2_video(r2_key)
+                    return
+                
                 # Get result URLs
                 result_urls = kling_client.parse_task_result(response)
                 if result_urls:
