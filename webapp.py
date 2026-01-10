@@ -185,7 +185,7 @@ async def kling_callback(request: Request):
                         else:
                             msg = "🎉 Great news! Your video is ready (it took longer than usual):"
                         await bot.send_message(int(user_id), msg)
-                        await bot.send_document(int(user_id), video_url)
+                        await bot.send_document(int(user_id), video_url, disable_content_type_detection=True)
                     except Exception as e:
                         logger.error(f"Error sending late callback result: {e}")
                 
@@ -197,13 +197,23 @@ async def kling_callback(request: Request):
                         else:
                             msg = "✅ Generation complete!"
                         await bot.send_message(int(user_id), msg)
-                        await bot.send_document(int(user_id), video_url)
+                        await bot.send_document(int(user_id), video_url, disable_content_type_detection=True)
                     except Exception as e:
                         logger.error(f"Error sending callback result: {e}")
                 
                 elif current_status == "completed":
-                    # Already processed by polling or previous callback
-                    logger.info(f"Generation {generation_id} already completed, skipping callback send")
+                    # Already processed - this is likely a manual "Retry callback"
+                    # Still send the video for support/recovery purposes
+                    logger.info(f"Retry callback for generation {generation_id} - resending video")
+                    try:
+                        if lang == "ru":
+                            msg = "✅ Ваше видео (повторная отправка):"
+                        else:
+                            msg = "✅ Your video (resent):"
+                        await bot.send_message(int(user_id), msg)
+                        await bot.send_document(int(user_id), video_url, disable_content_type_detection=True)
+                    except Exception as e:
+                        logger.error(f"Error resending video: {e}")
                 
                 # Update generation status to completed
                 db.update_generation(int(generation_id), "completed", video_url=video_url)

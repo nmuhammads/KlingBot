@@ -133,7 +133,7 @@ async def poll_task_and_send_result(
                     success_msg = t("generation_success", lang)
                     try:
                         # Try sending as document with caption
-                        await bot.send_document(chat_id, video_url, caption=success_msg)
+                        await bot.send_document(chat_id, video_url, caption=success_msg, disable_content_type_detection=True)
                     except Exception as send_err:
                         logger.error(f"Error sending video by URL for task {task_id}: {send_err}")
                         # Fallback: download and send
@@ -144,7 +144,7 @@ async def poll_task_and_send_result(
                                 video_bytes = file_resp.content
                                 
                                 input_file = BufferedInputFile(video_bytes, filename=f"video_{task_id}.mp4")
-                                await bot.send_document(chat_id, input_file, caption=success_msg)
+                                await bot.send_document(chat_id, input_file, caption=success_msg, disable_content_type_detection=True)
                         except Exception as e:
                             logger.error(f"Error downloading/sending video file: {e}")
                             # Last resort: just text
