@@ -23,6 +23,7 @@ from config import settings
 from utils.i18n import t
 from utils.kling_api import kling_client, KlingPricing, KlingModel, TaskState, KlingApiError
 from utils.video_processor import process_video_for_api, cleanup_r2_video
+from utils.result_sender import send_video_result, send_failure_result
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -129,30 +130,8 @@ async def poll_task_and_send_result(
                     # Update generation in DB
                     db.update_generation(generation_id, "completed", video_url=video_url)
                     
-                    # Send video to user
-                    success_msg = t("generation_success", lang)
-                    try:
-                        # Try sending as document with caption
-                        await bot.send_document(chat_id, video_url, caption=success_msg, disable_content_type_detection=True)
-                    except Exception as send_err:
-                        logger.error(f"Error sending video by URL for task {task_id}: {send_err}")
-                        # Fallback: download and send
-                        try:
-                            async with httpx.AsyncClient() as client:
-                                file_resp = await client.get(video_url)
-                                file_resp.raise_for_status()
-                                video_bytes = file_resp.content
-                                
-                                input_file = BufferedInputFile(video_bytes, filename=f"video_{task_id}.mp4")
-                                await bot.send_document(chat_id, input_file, caption=success_msg, disable_content_type_detection=True)
-                        except Exception as e:
-                            logger.error(f"Error downloading/sending video file: {e}")
-                            # Last resort: just text
-                            try:
-                                fallback_msg = f"{success_msg}\n\n📥 {video_url}"
-                                await bot.send_message(chat_id, fallback_msg)
-                            except Exception:
-                                pass
+                    # Send video to user using unified sender with fallback
+                    await send_video_result(bot, user_id, video_url, generation_id, lang)
                     
                     # Cleanup R2 video
                     await cleanup_r2_video(r2_key)
@@ -174,11 +153,9 @@ async def poll_task_and_send_result(
                 # Refund balance
                 db.update_user_balance(user_id, cost)
                 
-                # Notify user
-                await bot.send_message(
-                    chat_id,
-                    t("generation_failed", lang, error=error_msg)
-                )
+                # Notify user using unified sender
+                await send_failure_result(bot, user_id, generation_id, error_msg, lang)
+                
                 # Cleanup R2 video
                 await cleanup_r2_video(r2_key)
                 return

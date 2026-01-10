@@ -13,6 +13,7 @@ from aiogram.webhook.aiohttp_server import SimpleRequestHandler
 from bot import bot, dp
 from config import settings
 from database import db
+from utils.result_sender import send_video_result, send_failure_result
 
 # Import handlers to register them
 from handlers import start, generate, profile, topup
@@ -176,44 +177,20 @@ async def kling_callback(request: Request):
                     # Try to deduct balance again (it was refunded on timeout)
                     if not db.deduct_balance(int(user_id), cost):
                         logger.warning(f"Could not deduct balance for late callback: user {user_id}, cost {cost}")
-                        # Still update generation to success but note the balance issue
                     
                     # Notify user about late recovery
-                    try:
-                        if lang == "ru":
-                            msg = "🎉 Отличные новости! Ваше видео готово (оно заняло больше времени чем обычно):"
-                        else:
-                            msg = "🎉 Great news! Your video is ready (it took longer than usual):"
-                        await bot.send_message(int(user_id), msg)
-                        await bot.send_document(int(user_id), video_url, disable_content_type_detection=True)
-                    except Exception as e:
-                        logger.error(f"Error sending late callback result: {e}")
+                    late_msg = "🎉 Отличные новости! Ваше видео готово (оно заняло больше времени чем обычно):" if lang == "ru" else "🎉 Great news! Your video is ready (it took longer than usual):"
+                    await send_video_result(bot, int(user_id), video_url, int(generation_id), lang, late_msg)
                 
                 elif current_status in ("processing", "pending"):
                     # Normal callback - generation still in progress
-                    try:
-                        if lang == "ru":
-                            msg = "✅ Генерация завершена!"
-                        else:
-                            msg = "✅ Generation complete!"
-                        await bot.send_message(int(user_id), msg)
-                        await bot.send_document(int(user_id), video_url, disable_content_type_detection=True)
-                    except Exception as e:
-                        logger.error(f"Error sending callback result: {e}")
+                    await send_video_result(bot, int(user_id), video_url, int(generation_id), lang)
                 
                 elif current_status == "completed":
                     # Already processed - this is likely a manual "Retry callback"
-                    # Still send the video for support/recovery purposes
                     logger.info(f"Retry callback for generation {generation_id} - resending video")
-                    try:
-                        if lang == "ru":
-                            msg = "✅ Ваше видео (повторная отправка):"
-                        else:
-                            msg = "✅ Your video (resent):"
-                        await bot.send_message(int(user_id), msg)
-                        await bot.send_document(int(user_id), video_url, disable_content_type_detection=True)
-                    except Exception as e:
-                        logger.error(f"Error resending video: {e}")
+                    retry_msg = "✅ Ваше видео (повторная отправка):" if lang == "ru" else "✅ Your video (resent):"
+                    await send_video_result(bot, int(user_id), video_url, int(generation_id), lang, retry_msg)
                 
                 # Update generation status to completed
                 db.update_generation(int(generation_id), "completed", video_url=video_url)
@@ -230,15 +207,7 @@ async def kling_callback(request: Request):
                 if current_status in ("processing", "pending"):
                     cost = generation.get("cost", 0)
                     db.update_user_balance(int(user_id), cost)
-                    
-                    try:
-                        if lang == "ru":
-                            msg = f"❌ Ошибка генерации: {fail_msg}"
-                        else:
-                            msg = f"❌ Generation failed: {fail_msg}"
-                        await bot.send_message(int(user_id), msg)
-                    except Exception as e:
-                        logger.error(f"Error sending fail notification: {e}")
+                    await send_failure_result(bot, int(user_id), int(generation_id), fail_msg, lang)
         
         return {"status": "ok"}
         
