@@ -76,10 +76,11 @@ def upscale_video(input_path: str, output_path: str, target_min: int = MIN_RESOL
         True if successful
     """
     try:
-        # Scale filter: if width < height, set height to target_min
-        # Otherwise set width to target_min
+        # Scale filter: scale the SMALLER dimension to target_min
+        # For portrait (width < height): set width = target_min
+        # For landscape (width >= height): set height = target_min
         # -2 ensures even number for encoding compatibility
-        scale_filter = f"scale='if(gt(iw,ih),{target_min},-2)':'if(gt(iw,ih),-2,{target_min})'"
+        scale_filter = f"scale='if(lte(iw,ih),{target_min},-2)':'if(lte(iw,ih),-2,{target_min})'"
         
         result = subprocess.run(
             [
