@@ -22,6 +22,7 @@ from database import db
 from config import settings
 from utils.i18n import t
 from utils.kling_api import kling_client, KlingPricing, KlingModel, TaskState, KlingApiError
+from utils.video_processor import process_video_for_api, cleanup_r2_video
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -91,11 +92,15 @@ async def poll_task_and_send_result(
     generation_id: int,
     user_id: int,
     cost: int,
-    lang: str
+    lang: str,
+    r2_key: Optional[str] = None
 ) -> None:
     """
     Poll Kling API for task completion and send result to user.
     Runs as background task.
+    
+    Args:
+        r2_key: Optional R2 object key to cleanup after completion
     """
     max_attempts = 300  # 25 minutes max (Motion Control can take 20+ min)
     poll_interval = 5  # seconds
@@ -142,6 +147,8 @@ async def poll_task_and_send_result(
                             except Exception:
                                 pass
                     
+                    # Cleanup R2 video
+                    await cleanup_r2_video(r2_key)
                     return
                     
             elif state == TaskState.FAIL.value:
@@ -158,6 +165,8 @@ async def poll_task_and_send_result(
                     chat_id,
                     t("generation_failed", lang, error=error_msg)
                 )
+                # Cleanup R2 video
+                await cleanup_r2_video(r2_key)
                 return
                 
         except Exception as e:
@@ -877,7 +886,7 @@ async def mc_confirm(callback: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     
     image_url = data.get("image_url", "")
-    video_url = data.get("video_url", "")
+    original_video_url = data.get("video_url", "")
     prompt = data.get("prompt", "")
     orientation = data.get("orientation", "video")
     mode = data.get("mode", "720p")
@@ -891,6 +900,31 @@ async def mc_confirm(callback: CallbackQuery, state: FSMContext) -> None:
         )
         await state.clear()
         await callback.answer()
+        return
+    
+    # Show processing message
+    await callback.message.edit_text(t("processing_video", lang) if lang == "ru" else "⏳ Processing video...")
+    await callback.answer()
+    
+    # Process video: check resolution and upscale if needed
+    r2_key = None
+    try:
+        processed_video_url, r2_key = await process_video_for_api(original_video_url, user_id)
+        
+        if processed_video_url is None:
+            # Processing failed
+            db.update_user_balance(user_id, cost)
+            await callback.message.edit_text(t("error_video_processing", lang) if lang == "ru" else "❌ Failed to process video")
+            await state.clear()
+            return
+        
+        video_url = processed_video_url
+        
+    except Exception as e:
+        logger.error(f"Error processing video for MC: {e}")
+        db.update_user_balance(user_id, cost)
+        await callback.message.edit_text(t("error_generic", lang))
+        await state.clear()
         return
     
     # Create generation record first to get ID for meta
@@ -941,7 +975,6 @@ async def mc_confirm(callback: CallbackQuery, state: FSMContext) -> None:
         
         await callback.message.edit_text(t("generation_started", lang))
         await state.clear()
-        await callback.answer()
         
         if generation_id:
             asyncio.create_task(
@@ -952,7 +985,8 @@ async def mc_confirm(callback: CallbackQuery, state: FSMContext) -> None:
                     generation_id,
                     user_id,
                     cost,
-                    lang
+                    lang,
+                    r2_key  # Pass R2 key for cleanup after completion
                 )
             )
         
@@ -962,17 +996,23 @@ async def mc_confirm(callback: CallbackQuery, state: FSMContext) -> None:
         if generation_id:
             db.update_generation(generation_id, "fail", error_message=f"API Error {e.code}: {e.message}")
         
+        # Cleanup R2 video on error
+        await cleanup_r2_video(r2_key)
+        
         # Show user-friendly error message
         user_msg = e.get_user_message(lang)
         await callback.message.edit_text(f"❌ {user_msg}")
         await state.clear()
-        await callback.answer()
         
     except Exception as e:
         logger.error(f"Error creating MC task: {e}")
         db.update_user_balance(user_id, cost)
         if generation_id:
             db.update_generation(generation_id, "fail", error_message=str(e))
+        
+        # Cleanup R2 video on error
+        await cleanup_r2_video(r2_key)
+        
         await callback.message.edit_text(t("error_generic", lang))
         await state.clear()
-        await callback.answer()
+

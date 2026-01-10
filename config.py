@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     hub_allowed_amounts: str = "50,120,300,800"
     hub_allowed_star_amounts: str = "10,20,50,100"
     
+    # Cloudflare R2 (video storage)
+    r2_video_account_id: str = ""
+    r2_video_access_key_id: str = ""
+    r2_video_secret_access_key: str = ""
+    r2_bucket_video_refs: str = "video-refs"
+    r2_public_url_video_refs: str = ""
+    
     @property
     def allowed_amounts(self) -> List[int]:
         return [int(x) for x in self.hub_allowed_amounts.split(",")]

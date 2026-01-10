@@ -233,6 +233,14 @@ MESSAGES: Dict[str, Dict[str, str]] = {
         "ru": "❌ Видео слишком длинное для выбранного режима (максимум {max_duration} сек).",
         "en": "❌ Video too long for selected mode (maximum {max_duration} sec)."
     },
+    "processing_video": {
+        "ru": "⏳ Обрабатываем видео...",
+        "en": "⏳ Processing video..."
+    },
+    "error_video_processing": {
+        "ru": "❌ Не удалось обработать видео. Попробуйте другой файл.",
+        "en": "❌ Failed to process video. Please try another file."
+    },
     
     # Language
     "lang_select": {
