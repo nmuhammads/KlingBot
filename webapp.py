@@ -70,6 +70,27 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="KlingBot", lifespan=lifespan)
 
 
+# Add request logging middleware
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """Log all incoming HTTP requests."""
+    import time
+    start_time = time.time()
+    
+    # Log request
+    logger.info(f">>> HTTP {request.method} {request.url.path} from {request.client.host if request.client else 'unknown'}")
+    
+    try:
+        response = await call_next(request)
+        process_time = (time.time() - start_time) * 1000
+        logger.info(f"<<< HTTP {request.method} {request.url.path} -> {response.status_code} ({process_time:.2f}ms)")
+        return response
+    except Exception as e:
+        process_time = (time.time() - start_time) * 1000
+        logger.error(f"<<< HTTP {request.method} {request.url.path} -> ERROR ({process_time:.2f}ms): {e}")
+        raise
+
+
 @app.post("/webhook")
 async def webhook_handler(request: Request) -> Response:
     """Handle incoming Telegram updates via webhook."""
