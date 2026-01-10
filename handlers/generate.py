@@ -159,6 +159,13 @@ async def poll_task_and_send_result(
                     return
                     
             elif state == TaskState.FAIL.value:
+                # Check if already processed by callback
+                gen = db.get_generation(generation_id)
+                if gen and gen.get("status") == "fail":
+                    logger.info(f"Generation {generation_id} already failed by callback, skipping refund")
+                    await cleanup_r2_video(r2_key)
+                    return
+                
                 error_msg = data.get("failMsg", "Unknown error")
                 
                 # Update generation in DB
