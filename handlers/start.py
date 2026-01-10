@@ -52,7 +52,6 @@ async def cmd_start(message: Message, command: CommandObject) -> None:
             first_name=user.first_name,
             last_name=user.last_name,
             language_code=user.language_code,
-            is_premium=user.is_premium or False,
             ref=args  # Will be processed (ref_username -> username)
         )
         logger.info(f"User {user.id} retrieved/created successfully")

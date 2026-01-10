@@ -68,8 +68,6 @@ class Database:
                     update_data["first_name"] = first_name
                 if last_name and existing.get("last_name") != last_name:
                     update_data["last_name"] = last_name
-                if is_premium != existing.get("is_premium"):
-                    update_data["is_premium"] = is_premium
                 
                 # Update referral if provided and user has no referrer
                 if ref and not existing.get("ref"):
